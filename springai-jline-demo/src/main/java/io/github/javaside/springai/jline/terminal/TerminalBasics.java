@@ -25,7 +25,7 @@ public final class TerminalBasics {
 
     public static void main(String[] args) throws java.io.IOException {
         // 创建/关闭的标准写法：try-with-resources 建一个真实终端，离开 try 自动 close() 复原。
-        try (Terminal terminal = TerminalBuilder.builder().system(true).build()) {
+        try (Terminal terminal = TerminalBuilder.builder().system(true).encoding("UTF-8").build()) {
             new TerminalBasics().run(terminal);
         }
     }
@@ -49,6 +49,7 @@ public final class TerminalBasics {
         try (Terminal demo = TerminalBuilder.builder()                 // 建
                 .name("临时演示终端")
                 .system(false)
+                .encoding("UTF-8")
                 .streams(new ByteArrayInputStream(new byte[0]), captured)
                 .build()) {
             demo.writer().println("第一行：你好，我是被新建出来的 Terminal");   // 用：往它写

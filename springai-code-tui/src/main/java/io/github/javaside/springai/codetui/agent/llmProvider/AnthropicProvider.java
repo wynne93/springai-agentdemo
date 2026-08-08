@@ -1,6 +1,7 @@
-package io.github.javaside.springai.codetui.agent;
+package io.github.javaside.springai.codetui.agent.llmProvider;
 
 import com.anthropic.models.messages.Model;
+import io.github.javaside.springai.codetui.agent.record.ModelOption;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.model.ChatModel;

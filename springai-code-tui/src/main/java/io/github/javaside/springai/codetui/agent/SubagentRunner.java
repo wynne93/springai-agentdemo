@@ -1,5 +1,7 @@
 package io.github.javaside.springai.codetui.agent;
 
+import io.github.javaside.springai.codetui.agent.llmProvider.ProviderRegistry;
+import io.github.javaside.springai.codetui.agent.record.SubagentSpec;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
 import org.springframework.ai.chat.prompt.ChatOptions;

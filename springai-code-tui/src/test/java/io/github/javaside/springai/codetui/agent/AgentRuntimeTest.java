@@ -1,5 +1,7 @@
 package io.github.javaside.springai.codetui.agent;
 
+import io.github.javaside.springai.codetui.agent.llmProvider.DeepSeekProvider;
+import io.github.javaside.springai.codetui.agent.llmProvider.ProviderRegistry;
 import io.github.javaside.springai.codetui.ui.ConversationState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

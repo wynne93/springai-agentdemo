@@ -1,5 +1,6 @@
 package io.github.javaside.springai.codetui.agent;
 
+import io.github.javaside.springai.codetui.agent.record.SkillInfo;
 import org.springaicommunity.agent.tools.SkillsTool;
 import org.springaicommunity.agent.utils.Skills;
 import org.springframework.ai.tool.ToolCallback;

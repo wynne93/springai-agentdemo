@@ -1,4 +1,7 @@
-package io.github.javaside.springai.codetui.agent;
+package io.github.javaside.springai.codetui.agent.record;
+
+import io.github.javaside.springai.codetui.agent.AgentListener;
+import io.github.javaside.springai.codetui.agent.SubmitHandler;
 
 /**
  * 会话上下文用量快照（{@code /context} 命令用）——<b>纯 Java</b>，不泄漏任何 Spring AI 类型，

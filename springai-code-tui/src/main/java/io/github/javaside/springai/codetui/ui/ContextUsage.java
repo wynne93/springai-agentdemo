@@ -1,6 +1,6 @@
 package io.github.javaside.springai.codetui.ui;
 
-import io.github.javaside.springai.codetui.agent.ContextStats;
+import io.github.javaside.springai.codetui.agent.record.ContextStats;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;

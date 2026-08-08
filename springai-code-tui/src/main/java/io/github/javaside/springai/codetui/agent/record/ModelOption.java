@@ -1,4 +1,4 @@
-package io.github.javaside.springai.codetui.agent;
+package io.github.javaside.springai.codetui.agent.record;
 
 /**
  * 一个可选模型条目（供 {@code /model} 选择器展示与切换）。

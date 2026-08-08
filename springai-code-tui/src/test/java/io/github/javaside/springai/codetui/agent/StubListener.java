@@ -1,5 +1,7 @@
 package io.github.javaside.springai.codetui.agent;
 
+import io.github.javaside.springai.codetui.agent.record.AskRequest;
+
 import java.util.List;
 
 /** AgentListener 的空实现基类：测试只覆写关心的方法。 */

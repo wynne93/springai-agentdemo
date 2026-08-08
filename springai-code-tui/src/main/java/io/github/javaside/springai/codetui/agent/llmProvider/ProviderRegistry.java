@@ -1,5 +1,6 @@
-package io.github.javaside.springai.codetui.agent;
+package io.github.javaside.springai.codetui.agent.llmProvider;
 
+import io.github.javaside.springai.codetui.agent.record.ModelOption;
 import org.springframework.ai.chat.prompt.ChatOptions;
 
 import java.util.ArrayList;

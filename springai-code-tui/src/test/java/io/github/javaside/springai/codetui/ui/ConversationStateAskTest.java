@@ -1,9 +1,9 @@
 package io.github.javaside.springai.codetui.ui;
 
-import io.github.javaside.springai.codetui.agent.AskRequest;
+import io.github.javaside.springai.codetui.agent.record.AskRequest;
 import io.github.javaside.springai.codetui.agent.AskResponder;
-import io.github.javaside.springai.codetui.agent.OptionSpec;
-import io.github.javaside.springai.codetui.agent.QuestionSpec;
+import io.github.javaside.springai.codetui.agent.record.OptionSpec;
+import io.github.javaside.springai.codetui.agent.record.QuestionSpec;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

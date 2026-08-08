@@ -1,5 +1,6 @@
 package io.github.javaside.springai.codetui.agent;
 
+import io.github.javaside.springai.codetui.agent.record.SubagentSpec;
 import org.springaicommunity.agent.utils.MarkdownParser;
 import org.springframework.core.io.DefaultResourceLoader;
 

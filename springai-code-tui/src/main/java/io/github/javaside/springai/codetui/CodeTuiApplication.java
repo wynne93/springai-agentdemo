@@ -1,12 +1,12 @@
 package io.github.javaside.springai.codetui;
 
 import io.github.javaside.springai.codetui.agent.AgentTools;
-import io.github.javaside.springai.codetui.agent.AnthropicProvider;
+import io.github.javaside.springai.codetui.agent.llmProvider.AnthropicProvider;
 import io.github.javaside.springai.codetui.agent.CodingAgent;
-import io.github.javaside.springai.codetui.agent.DeepSeekProvider;
+import io.github.javaside.springai.codetui.agent.llmProvider.DeepSeekProvider;
 import io.github.javaside.springai.codetui.agent.FileSessionRepository;
-import io.github.javaside.springai.codetui.agent.OpenAiProvider;
-import io.github.javaside.springai.codetui.agent.ProviderRegistry;
+import io.github.javaside.springai.codetui.agent.llmProvider.OpenAiProvider;
+import io.github.javaside.springai.codetui.agent.llmProvider.ProviderRegistry;
 import io.github.javaside.springai.codetui.ui.CodeTuiView;
 import io.github.javaside.springai.codetui.ui.ConversationState;
 

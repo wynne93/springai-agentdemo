@@ -1,10 +1,10 @@
 package io.github.javaside.springai.codetui.ui;
 
-import io.github.javaside.springai.codetui.agent.AskRequest;
-import io.github.javaside.springai.codetui.agent.ModelOption;
-import io.github.javaside.springai.codetui.agent.OptionSpec;
-import io.github.javaside.springai.codetui.agent.QuestionSpec;
-import io.github.javaside.springai.codetui.agent.SkillInfo;
+import io.github.javaside.springai.codetui.agent.record.AskRequest;
+import io.github.javaside.springai.codetui.agent.record.ModelOption;
+import io.github.javaside.springai.codetui.agent.record.OptionSpec;
+import io.github.javaside.springai.codetui.agent.record.QuestionSpec;
+import io.github.javaside.springai.codetui.agent.record.SkillInfo;
 import io.github.javaside.springai.codetui.agent.SubmitHandler;
 import io.github.javaside.springai.codetui.ui.ConversationState.OutputLine;
 import dev.tamboui.buffer.Buffer;

@@ -1,5 +1,8 @@
 package io.github.javaside.springai.codetui.agent;
 
+import io.github.javaside.springai.codetui.agent.llmProvider.AnthropicProvider;
+import io.github.javaside.springai.codetui.agent.llmProvider.DeepSeekProvider;
+import io.github.javaside.springai.codetui.agent.llmProvider.OpenAiProvider;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

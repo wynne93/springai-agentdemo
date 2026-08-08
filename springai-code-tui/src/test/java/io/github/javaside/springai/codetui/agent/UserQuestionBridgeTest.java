@@ -1,5 +1,9 @@
 package io.github.javaside.springai.codetui.agent;
 
+import io.github.javaside.springai.codetui.agent.exception.QuestionCancelledException;
+import io.github.javaside.springai.codetui.agent.record.AskRequest;
+import io.github.javaside.springai.codetui.agent.record.OptionSpec;
+import io.github.javaside.springai.codetui.agent.record.QuestionSpec;
 import org.junit.jupiter.api.Test;
 import org.springaicommunity.agent.tools.AskUserQuestionTool.Question;
 import org.springaicommunity.agent.tools.AskUserQuestionTool.Question.Option;
