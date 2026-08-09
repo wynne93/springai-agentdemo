@@ -65,7 +65,7 @@ public final class SkillCatalog {
      * @param projectRoot 项目根目录
      * @param userDir     用户级技能目录（可为 {@code null}，表示无用户级）
      */
-    static Loaded load(Path projectRoot, Path userDir) {
+    public static Loaded load(Path projectRoot, Path userDir) {
         Path projectDir = projectRoot.resolve(DIR_NAME);
 
         // 顺序即优先级：用户 → 项目（LinkedHashMap.put 后勝ち去重）。

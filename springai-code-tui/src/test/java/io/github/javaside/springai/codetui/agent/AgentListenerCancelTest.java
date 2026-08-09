@@ -1,5 +1,6 @@
 package io.github.javaside.springai.codetui.agent;
 
+import io.github.javaside.springai.codetui.agent.agentListener.AgentListener;
 import io.github.javaside.springai.codetui.ui.ConversationState;
 import io.github.javaside.springai.codetui.ui.ConversationState.OutputLine;
 import org.junit.jupiter.api.Test;

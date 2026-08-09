@@ -1,9 +1,17 @@
 package io.github.javaside.springai.codetui.agent;
 
+import io.github.javaside.springai.codetui.agent.agentListener.AgentListener;
+import io.github.javaside.springai.codetui.agent.compactionStrategy.NotifyingCompactionStrategy;
 import io.github.javaside.springai.codetui.agent.llmProvider.LlmProvider;
 import io.github.javaside.springai.codetui.agent.llmProvider.ProviderRegistry;
 import io.github.javaside.springai.codetui.agent.record.SkillInfo;
 import io.github.javaside.springai.codetui.agent.record.SubagentSpec;
+import io.github.javaside.springai.codetui.agent.sessionRepository.FileSessionRepository;
+import io.github.javaside.springai.codetui.agent.subAgent.SubagentLoader;
+import io.github.javaside.springai.codetui.agent.subAgent.SubagentRunner;
+import io.github.javaside.springai.codetui.agent.subAgent.SubagentTool;
+import io.github.javaside.springai.codetui.agent.tool.ReloadableSkillTool;
+import io.github.javaside.springai.codetui.agent.tool.TodoWriteToolAdapter;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
 import org.springaicommunity.agent.tools.FileSystemTools;
 import org.springaicommunity.agent.tools.GlobTool;
@@ -14,6 +22,7 @@ import org.springaicommunity.agent.tools.TodoWriteTool;
 import org.springaicommunity.agent.tools.TodoWriteTool.Todos;
 import org.springaicommunity.agent.utils.AgentEnvironment;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.session.DefaultSessionService;
 import org.springframework.ai.session.SessionRepository;
 import org.springframework.ai.session.SessionService;
@@ -32,6 +41,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /**
  * AgentTools —— 组装编码 Agent 用的 {@link ChatClient} 的工厂。
@@ -137,6 +147,33 @@ public final class AgentTools {
             """;
 
     /**
+     * build 的产物：每个可用 provider 的 ChatClient（按 provider id 索引）+ 手动 /compact 所需的会话句柄。
+     *
+     * @param clients             每个可用 provider 各一个 ChatClient，键为 {@code provider.id()}（共享工具/记忆/系统模板，仅底层 ChatModel 不同）
+     * @param activeProviderId    激活（默认）provider 的 id，{@link #client()} 据此选默认 ChatClient
+     * @param sessionService      会话服务（手动压缩经它 {@code compact(id, trigger, strategy)}；/context 经它读事件）
+     * @param sessionRepository   会话事件仓库（取消回合时 {@code CodingAgent} 用它 {@code replaceEvents} 回滚半截历史）
+     * @param manualStrategy      激进的手动压缩策略（未包装装饰器，见类注释）
+     * @param tokenCountEstimator token 估算器（与压缩共用，供 {@code /context} 估算会话 token）
+     * @param skills              初始（装配期）可用技能清单快照；运行期实时清单改经 {@link #reloadableSkill}
+     * @param skillTool           被 ToolEventCallback 装饰的 Skill 代理（供手动 /skill 复用）；始终非 null
+     * @param reloadableSkill     可重载 Skill 代理（{@code /reload} 触发重扫 + {@code skills()} 实时数据源）
+     */
+    public record AgentRuntime(Map<String, ChatClient> clients,
+                               String activeProviderId,
+                               SessionService sessionService,
+                               SessionRepository sessionRepository,
+                               CompactionStrategy manualStrategy,
+                               TokenCountEstimator tokenCountEstimator,
+                               List<SkillInfo> skills,
+                               ToolCallback skillTool,
+                               ReloadableSkillTool reloadableSkill) {
+
+        /** 便捷：激活 provider 的 ChatClient（单-provider 用法与旧代码兼容）。 */
+        public ChatClient client() { return clients.get(activeProviderId); }
+    }
+
+    /**
      * 组装编码 Agent 的 ChatClient。仅做装配，不发起任何网络请求，也不要求有效的 API key。
      *
      * @param registry provider 注册表（每个可用 provider 各建一个 ChatClient；auxClient 与系统提示的模型名取激活 provider）
@@ -161,7 +198,7 @@ public final class AgentTools {
         // 「裸」ChatClient（同模型、无工具、无记忆 advisor）：一份复用给两处内部 LLM 调用——
         // ① SmartWebFetch 的网页内容 AI 抽取；② 会话历史的滚动摘要。都不能带工具/记忆，否则会递归触发工具或记忆循环。
         // 绑定激活（默认）provider 的模型。
-        org.springframework.ai.chat.model.ChatModel activeModel = registry.active().chatModel();
+        ChatModel activeModel = registry.active().chatModel();
         ChatClient auxClient = ChatClient.builder(activeModel).build();
 
         // 网页获取工具：抓取→转 Markdown→按 prompt AI 抽取。关掉 domainSafetyCheck（见类注释）。
@@ -192,8 +229,7 @@ public final class AgentTools {
                 ToolCallbacks.from(new TodoWriteToolAdapter(todo))[0],
                 ToolCallbacks.from(todo)[0].getToolDefinition().description());
 
-        List<ToolCallback> all = new ArrayList<>(Arrays.asList(
-                ToolCallbacks.from(fs, sh, grep, glob, webFetch, askTool)));
+        List<ToolCallback> all = new ArrayList<>(Arrays.asList(ToolCallbacks.from(fs, sh, grep, glob, webFetch, askTool)));
         all.add(todoCallback);      // 薄适配器版 TodoWrite（名仍为 "TodoWrite"）
         all.add(reloadableSkill);   // 始终注册可重载 Skill 代理（支持运行期 /reload 从零热加载）
         ToolCallback[] decorated = new ToolCallback[all.size()];
@@ -207,9 +243,9 @@ public final class AgentTools {
 
         // 子 agent（Task 工具）：SubagentRunner 复用「已装饰、带边界」的工具列表 decorated；
         // Task 工具本身也用 ToolEventCallback 装饰，故委派本身在主流显示为一行。
-        java.util.List<ToolCallback> decoratedList = java.util.List.of(decorated);
+        List<ToolCallback> decoratedList = List.of(decorated);
         SubagentRunner subagentRunner = new SubagentRunner(registry, decoratedList, listener);
-        java.util.Map<String, SubagentSpec> subagentSpecs = SubagentLoader.loadBuiltins();
+        Map<String, SubagentSpec> subagentSpecs = SubagentLoader.loadBuiltins();
         ToolCallback taskTool = SubagentTool.create(subagentSpecs,
                 (spec, prompt, desc, turnIgnored) ->
                         // 真实 parentTurnId 从 ThreadLocal 取（Task 工具被 ToolEventCallback 装饰，call 时已压入）
@@ -268,12 +304,14 @@ public final class AgentTools {
                 continue;
             }
             ChatClient c = ChatClient.builder(provider.chatModel())
-                    .defaultSystem(s -> s.text(SYSTEM_TEMPLATE)
+                    .defaultSystem(
+                            s -> s.text(SYSTEM_TEMPLATE)
                             .param(AgentEnvironment.ENVIRONMENT_INFO_KEY, environmentInfo)
                             .param(AgentEnvironment.GIT_STATUS_KEY, gitStatus)
                             // 每个 client 烘焙自家默认模型，保证 defaultSystem 自洽；
                             // 每回合 submit 会用实际所选模型再覆盖此 param（见 CodingAgent.submit）。
-                            .param(AgentEnvironment.AGENT_MODEL_KEY, provider.defaultModel()))
+                            .param(AgentEnvironment.AGENT_MODEL_KEY, provider.defaultModel())
+                    )
                     .defaultTools(toolsWithTask)
                     .defaultAdvisors(memoryAdvisor)
                     .build();
@@ -283,33 +321,6 @@ public final class AgentTools {
         return new AgentRuntime(clients, registry.active().id(), sessionService, sessionRepository,
                 manualStrategy, tokenCountEstimator, reloadableSkill.skills(), decoratedSkillTool,
                 reloadableSkill);
-    }
-
-    /**
-     * build 的产物：每个可用 provider 的 ChatClient（按 provider id 索引）+ 手动 /compact 所需的会话句柄。
-     *
-     * @param clients             每个可用 provider 各一个 ChatClient，键为 {@code provider.id()}（共享工具/记忆/系统模板，仅底层 ChatModel 不同）
-     * @param activeProviderId    激活（默认）provider 的 id，{@link #client()} 据此选默认 ChatClient
-     * @param sessionService      会话服务（手动压缩经它 {@code compact(id, trigger, strategy)}；/context 经它读事件）
-     * @param sessionRepository   会话事件仓库（取消回合时 {@code CodingAgent} 用它 {@code replaceEvents} 回滚半截历史）
-     * @param manualStrategy      激进的手动压缩策略（未包装装饰器，见类注释）
-     * @param tokenCountEstimator token 估算器（与压缩共用，供 {@code /context} 估算会话 token）
-     * @param skills              初始（装配期）可用技能清单快照；运行期实时清单改经 {@link #reloadableSkill}
-     * @param skillTool           被 ToolEventCallback 装饰的 Skill 代理（供手动 /skill 复用）；始终非 null
-     * @param reloadableSkill     可重载 Skill 代理（{@code /reload} 触发重扫 + {@code skills()} 实时数据源）
-     */
-    public record AgentRuntime(java.util.Map<String, ChatClient> clients,
-                               String activeProviderId,
-                               SessionService sessionService,
-                               SessionRepository sessionRepository,
-                               CompactionStrategy manualStrategy,
-                               TokenCountEstimator tokenCountEstimator,
-                               List<SkillInfo> skills,
-                               ToolCallback skillTool,
-                               ReloadableSkillTool reloadableSkill) {
-
-        /** 便捷：激活 provider 的 ChatClient（单-provider 用法与旧代码兼容）。 */
-        public ChatClient client() { return clients.get(activeProviderId); }
     }
 
     /** 测试钩子：返回反问工具经 {@link ToolCallbacks#from} 派生出的工具名（校验它确被识别为 @Tool 并注册）。 */

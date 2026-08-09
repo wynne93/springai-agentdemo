@@ -1,6 +1,6 @@
 package io.github.javaside.springai.codetui.ui;
 
-import io.github.javaside.springai.codetui.agent.AgentListener;
+import io.github.javaside.springai.codetui.agent.agentListener.AgentListener;
 import io.github.javaside.springai.codetui.agent.record.AskRequest;
 import dev.tamboui.text.CharWidth;
 import org.springframework.ai.chat.messages.Message;

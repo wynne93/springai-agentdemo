@@ -1,5 +1,6 @@
 package io.github.javaside.springai.codetui.agent;
 
+import io.github.javaside.springai.codetui.agent.sessionRepository.FileSessionRepository;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -14,7 +15,7 @@ import java.util.Set;
  * 会话事件的纯逻辑工具（无状态）。供 {@link CodingAgent}（中断裁剪）与 {@link FileSessionRepository}（加载裁剪）共用，
  * 避免仓库反向依赖 CodingAgent。
  */
-final class SessionEvents {
+public final class SessionEvents {
 
     private SessionEvents() {
     }
@@ -53,7 +54,7 @@ final class SessionEvents {
      * 只保留 id 命中 open 的结果（并从 open 移除），命中为空则整条丢弃、部分命中则重建为只含命中项。之后再对结果套用
      * {@link #cleanPrefixLength} 裁掉尾部悬空。返回值可能与入参同引用（无需改动时）。
      */
-    static List<SessionEvent> sanitize(List<SessionEvent> events) {
+    public static List<SessionEvent> sanitize(List<SessionEvent> events) {
         List<SessionEvent> filtered = new ArrayList<>(events.size());
         Set<String> open = new HashSet<>();
         boolean changed = false;

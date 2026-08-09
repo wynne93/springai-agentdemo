@@ -1,4 +1,4 @@
-package io.github.javaside.springai.codetui.agent;
+package io.github.javaside.springai.codetui.agent.agentListener;
 
 import io.github.javaside.springai.codetui.agent.record.AskRequest;
 

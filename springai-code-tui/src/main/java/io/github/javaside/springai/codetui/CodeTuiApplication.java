@@ -4,7 +4,7 @@ import io.github.javaside.springai.codetui.agent.AgentTools;
 import io.github.javaside.springai.codetui.agent.llmProvider.AnthropicProvider;
 import io.github.javaside.springai.codetui.agent.CodingAgent;
 import io.github.javaside.springai.codetui.agent.llmProvider.DeepSeekProvider;
-import io.github.javaside.springai.codetui.agent.FileSessionRepository;
+import io.github.javaside.springai.codetui.agent.sessionRepository.FileSessionRepository;
 import io.github.javaside.springai.codetui.agent.llmProvider.OpenAiProvider;
 import io.github.javaside.springai.codetui.agent.llmProvider.ProviderRegistry;
 import io.github.javaside.springai.codetui.ui.CodeTuiView;

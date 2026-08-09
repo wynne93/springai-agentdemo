@@ -1,5 +1,6 @@
-package io.github.javaside.springai.codetui.agent;
+package io.github.javaside.springai.codetui.agent.sessionRepository;
 
+import io.github.javaside.springai.codetui.agent.SessionEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -53,7 +54,7 @@ public final class FileSessionRepository implements SessionRepository {
     private final Path baseDir;
     private final Map<String, SessionData> store = new ConcurrentHashMap<>();
 
-    FileSessionRepository(Path baseDir) {
+    public FileSessionRepository(Path baseDir) {
         this.baseDir = baseDir;
     }
 
