@@ -64,13 +64,13 @@ Base directory for this skill: {basePath}
 - **强制模型调工具**：靠提示词或 `tool_choice` 逼模型这一轮调 `Skill`。缺点：库无「强制调某工具」入口，
   只能*请求*模型（可能不调/调错/多一轮），把用户的明确意图退化成概率事件；且至少两轮、更慢。
 - **✅ 发送前真正调用被装饰的 Skill 工具（本方案）**：在消息发给模型**之前**，应用主动调一次
-  那个**已被 `ToolEventCallback` 装饰**的 Skill 工具，拿到正文后拼进消息再发。
+  那个**已被 `ToolCallbackAdapter` 装饰**的 Skill 工具，拿到正文后拼进消息再发。
 
 ### 3.2 本方案为何最优
 
 - **确定性**：正文一定进上下文，不靠模型自觉（符合「用户手动指定」的语义）。
 - **内容零漂移**：调的是真工具，返回文本与自动路径**逐字一致**。
-- **UI 免费统一**：被调的工具外层是 `ToolEventCallback`，其 `call()` 会发
+- **UI 免费统一**：被调的工具外层是 `ToolCallbackAdapter`，其 `call()` 会发
   `onToolStarted`/`onToolFinished`——于是手动路径**自动**在 TUI 显示出与自动路径**相同**的工具活动行。
 - **turnId 天然对齐**：用本回合 turnId 构造 `ToolContext(Map.of("turnId", turnId))` 传入，
   工具事件自然归属到这一回合。
@@ -132,7 +132,7 @@ public Disposable submit(String text) { return submit(text, null); }   // 保留
 
 - `toJsonCommand(name)` 生成 `{"command":"<name>"}`（技能名来自选择器选中、非用户手打，无解析风险；
   仍做最小转义以防技能名含引号）。
-- 工具调用失败（未知技能名等）：`ToolEventCallback` 已发 `onToolFinished(success=false)`，
+- 工具调用失败（未知技能名等）：`ToolCallbackAdapter` 已发 `onToolFinished(success=false)`，
   此处兜底为「不注入、按原文发送」，不使整条消息失败。
 
 ### 4.3 `SubmitHandler` — 加默认方法

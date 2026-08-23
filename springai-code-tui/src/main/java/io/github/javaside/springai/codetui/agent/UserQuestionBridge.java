@@ -21,8 +21,8 @@ import org.springaicommunity.agent.tools.AskUserQuestionTool.Question.Option;
  * 本桥把问询经 {@link AgentListener#onQuestionAsked} 交给 UI，然后阻塞在一次性队列 {@code take()} 上，
  * 直到 UI 经 {@link AskResponder#answer} 喂回答案（或 {@link AskResponder#cancel} 取消）。
  *
- * <p><b>turnId</b>：{@code handle()} 在被 {@link ToolEventCallback} 装饰的工具 call 内同线程同步触发，
- * 故直接读 {@link ToolEventCallback#currentTurnId()}（与 TodoWriteTool 的 handler 同款）。
+ * <p><b>turnId</b>：{@code handle()} 在被 {@link ToolCallbackAdapter} 装饰的工具 call 内同线程同步触发，
+ * 故直接读 {@link ToolCallbackAdapter#currentTurnId()}（与 TodoWriteTool 的 handler 同款）。
  *
  * <p><b>取消</b>：cancel 经队列投递哨兵 {@link #CANCEL}，{@code handle()} 唤醒后抛
  * {@link QuestionCancelledException}。此时回合已被 dispose、会话经 doOnCancel 回滚，异常随流被丢弃。
@@ -48,7 +48,7 @@ public final class UserQuestionBridge implements AskUserQuestionTool.QuestionHan
 
     @Override
     public Map<String, String> handle(List<Question> questions) {
-        long turnId = ToolEventCallback.currentTurnId();
+        long turnId = ToolCallbackAdapter.currentTurnId();
         List<QuestionSpec> specs = translate(questions);
         ArrayBlockingQueue<Object> handoff = new ArrayBlockingQueue<>(1);
         AskResponder responder = new AskResponder() {

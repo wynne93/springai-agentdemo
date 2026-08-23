@@ -4,7 +4,7 @@
 
 **Goal:** 让会话压缩对用户可见（自动压缩显示实时状态 + 完成结果），并新增手动 `/compact` 命令强制立即、激进地压缩会话历史。
 
-**Architecture:** 一个 `NotifyingCompactionStrategy` 装饰器包住真实压缩策略，在 `compact()` 前后经既有的 `AgentListener` 接缝发出「开始/完成/失败」事件——自动与手动两条路径共用同一装饰器与同一 UI。手动路径经 `SessionService.compact(id, req->true, 激进策略)` 直接触发；并发闸门放在 `CodeTuiView`（复用既有的「忙时入队」机制），不污染 `CodingAgent`。
+**Architecture:** 一个 `NotifyingCompactionStrategyAdapter` 装饰器包住真实压缩策略，在 `compact()` 前后经既有的 `AgentListener` 接缝发出「开始/完成/失败」事件——自动与手动两条路径共用同一装饰器与同一 UI。手动路径经 `SessionService.compact(id, req->true, 激进策略)` 直接触发；并发闸门放在 `CodeTuiView`（复用既有的「忙时入队」机制），不污染 `CodingAgent`。
 
 **Tech Stack:** Java 21、spring-ai-session 0.5.0（`org.springframework.ai.session.*`）、TamboUI（终端 UI）、JUnit 5、Maven。
 
@@ -207,7 +207,7 @@ git commit -m "feat(code-tui): add compaction events to AgentListener + Conversa
 
 ---
 
-## Task 2: `NotifyingCompactionStrategy` 装饰器
+## Task 2: `NotifyingCompactionStrategyAdapter` 装饰器
 
 包住任意 `CompactionStrategy`，在 `compact()` 前后经 `AgentListener` 发「开始/完成/失败」。自动与手动路径各包一份（reason 分别 `"auto"`/`"manual"`），一处代码驱动两条路径的指示器。
 
@@ -294,7 +294,7 @@ class NotifyingCompactionStrategyTest {
 - [ ] **Step 2: 运行测试，确认失败**
 
 Run: `cd springai-code-tui && mvn -q -Dtest=NotifyingCompactionStrategyTest test`
-Expected: 编译失败——`NotifyingCompactionStrategy` 不存在。
+Expected: 编译失败——`NotifyingCompactionStrategyAdapter` 不存在。
 
 - [ ] **Step 3: 实现装饰器**
 

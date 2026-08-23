@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>ChatClient 用 null——注入发生在 chatClient.prompt() 之前；prompt() 触发 NPE 会被 submit 的
  * catch(RuntimeException) 兜底为 onError（状态复位），不影响「工具已被调用」这一先决事实。
  *
- * <p><b>注入的工具是被 {@link ToolEventCallback} 装饰后的实例</b>（与生产装配一致，见 AgentTools）：
+ * <p><b>注入的工具是被 {@link ToolCallbackAdapter} 装饰后的实例</b>（与生产装配一致，见 AgentTools）：
  * 工具事件由该装饰器上报，CodingAgent 只负责「发送前真正调用它」。故测试把裸 fake 包一层装饰器再注入。
  */
 class CodingAgentSkillInjectTest {
@@ -59,7 +59,7 @@ class CodingAgentSkillInjectTest {
         RecordingListener listener = new RecordingListener();
         AtomicReference<String> toolInput = new AtomicReference<>();
         // 与生产一致：注入的是被 ToolEventCallback 装饰后的 Skill 工具，事件由装饰器上报。
-        ToolCallback decorated = new ToolEventCallback(fakeSkillTool(toolInput), listener);
+        ToolCallback decorated = new ToolCallbackAdapter(fakeSkillTool(toolInput), listener);
         CodingAgent agent = new CodingAgent(null, listener, "s", new AtomicLong(),
                 null, null, null, List.of(), decorated);
 
@@ -77,7 +77,7 @@ class CodingAgentSkillInjectTest {
     void submitWithNullSkill_doesNotCallTool() {
         RecordingListener listener = new RecordingListener();
         AtomicReference<String> toolInput = new AtomicReference<>();
-        ToolCallback decorated = new ToolEventCallback(fakeSkillTool(toolInput), listener);
+        ToolCallback decorated = new ToolCallbackAdapter(fakeSkillTool(toolInput), listener);
         CodingAgent agent = new CodingAgent(null, listener, "s", new AtomicLong(),
                 null, null, null, List.of(), decorated);
 

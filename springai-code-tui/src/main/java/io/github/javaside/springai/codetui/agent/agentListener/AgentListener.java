@@ -10,10 +10,30 @@ import java.util.List;
  */
 public interface AgentListener {
     void onTurnStarted(long turnId);                 // submit 顶部同步调用
+    void onTurnComplete(long turnId);
+
+    /**
+     * 模型经 AskUserQuestionTool 发问：UI 应弹出作答面板并最终经 {@code request.responder()} 应答。
+     * 与其它方法一样带 turnId 供迟到过滤。落地端会阻塞工具线程直到 UI 应答（见 UserQuestionBridge）。
+     */
+    void onQuestionAsked(long turnId, AskRequest request);
     void onUserMessage(long turnId, String text);
     void onAssistantToken(long turnId, String token);
+
     void onToolStarted(long turnId, String toolName, String input);
     void onToolFinished(long turnId, String toolName, String output, boolean ok);
+
+    void onTodoUpdated(long turnId, List<String> todoLines);   // Todos 转成可显示的行
+
+    void onError(long turnId, Throwable error);
+
+    // ── 会话压缩（跨回合的横切信号；无 turnId） ──
+    /** 压缩开始。reason: "auto"（阈值触发）| "manual"（/compact）。 */
+    void onCompactionStarted(String reason);
+    /** 压缩完成。eventsRemoved：被归档移除的事件数；tokensSaved：估算节省 token。 */
+    void onCompactionFinished(int eventsRemoved, int tokensSaved);
+    /** 压缩失败。message：失败原因（已做 null 安全处理的字符串）。 */
+    void onCompactionFailed(String message);
 
     // ── 子 agent（Task 工具委派） ──
     /** 子 agent 开始。taskId 唯一标识一次委派；agentName=subagent_type；description=调用方给的简述。 */
@@ -36,7 +56,6 @@ public interface AgentListener {
     default void onToolFinished(long turnId, String taskId, String toolName, String output, boolean ok) {
         onToolFinished(turnId, toolName, output, ok);
     }
-    void onTodoUpdated(long turnId, List<String> todoLines);   // Todos 转成可显示的行
 
     /**
      * 带 taskId 的 Todo 事件：taskId==null 是控制器（主 agent）的计划 todo（开发计划进度，进任务面板）；
@@ -46,20 +65,4 @@ public interface AgentListener {
     default void onTodoUpdated(long turnId, String taskId, List<String> todoLines) {
         onTodoUpdated(turnId, todoLines);
     }
-    void onTurnComplete(long turnId);
-    void onError(long turnId, Throwable error);
-
-    /**
-     * 模型经 AskUserQuestionTool 发问：UI 应弹出作答面板并最终经 {@code request.responder()} 应答。
-     * 与其它方法一样带 turnId 供迟到过滤。落地端会阻塞工具线程直到 UI 应答（见 UserQuestionBridge）。
-     */
-    void onQuestionAsked(long turnId, AskRequest request);
-
-    // ── 会话压缩（跨回合的横切信号；无 turnId） ──
-    /** 压缩开始。reason: "auto"（阈值触发）| "manual"（/compact）。 */
-    void onCompactionStarted(String reason);
-    /** 压缩完成。eventsRemoved：被归档移除的事件数；tokensSaved：估算节省 token。 */
-    void onCompactionFinished(int eventsRemoved, int tokensSaved);
-    /** 压缩失败。message：失败原因（已做 null 安全处理的字符串）。 */
-    void onCompactionFailed(String message);
 }

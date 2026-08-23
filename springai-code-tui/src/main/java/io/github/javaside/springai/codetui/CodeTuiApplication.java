@@ -40,6 +40,7 @@ public class CodeTuiApplication {
             return;
         }
 
+        /** UI的交互 用 AgentListener 捕获事件 */
         ConversationState state = new ConversationState();       // implements AgentListener
         AtomicLong activeTurnId = new AtomicLong();
 

@@ -4,7 +4,7 @@
 
 **Goal:** 让用户通过 `/skill` 选择器手动指定一个技能，紧接着的下一条消息在发送前真正调用被装饰的 Skill 工具（UI 显示工具活动）、把正文注入后发送。
 
-**Architecture:** 手动路径与模型自动路径共用同一个被 `ToolEventCallback` 装饰的 Skill `ToolCallback`——`AgentTools.build` 把它经 `AgentRuntime` 上抛；`CodingAgent.submit(text, skillName)` 在发送前用本回合 turnId 构造 `ToolContext` 调该工具，拿正文拼进 `<skill_instruction>` 再发。UI 侧 `CodeTuiView` 加 `/skill` 选择器（仿 `/model`）与「一次性挂载」状态；挂载随排队消息一起入队。
+**Architecture:** 手动路径与模型自动路径共用同一个被 `ToolCallbackAdapter` 装饰的 Skill `ToolCallback`——`AgentTools.build` 把它经 `AgentRuntime` 上抛；`CodingAgent.submit(text, skillName)` 在发送前用本回合 turnId 构造 `ToolContext` 调该工具，拿正文拼进 `<skill_instruction>` 再发。UI 侧 `CodeTuiView` 加 `/skill` 选择器（仿 `/model`）与「一次性挂载」状态；挂载随排队消息一起入队。
 
 **Tech Stack:** Java 21, Spring AI 2.0 (`ChatClient`/`ToolCallback`/`ToolContext`), spring-ai-agent-utils `SkillsTool`, TamboUI (`InlineApp`), JUnit 5, Maven。
 

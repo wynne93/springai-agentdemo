@@ -49,7 +49,7 @@ Skill 工具「执行」的是**按需注入一大段指令/提示词**。
 1. 让 code-tui 的编码 Agent **具备 Skill 能力**：模型能发现并按需调用用户 / 项目的技能。
 2. 定义清晰的**技能存放约定**（两层：用户级 / 项目级），并说明用户**如何编写与使用技能**。
 3. 新增 **`/skills` 命令**：让用户随时查看当前可用的技能清单。
-4. 让技能的「被发现 → 被调用」在 TUI 里**可见**（复用现有 `ToolEventCallback` 事件通道）。
+4. 让技能的「被发现 → 被调用」在 TUI 里**可见**（复用现有 `ToolCallbackAdapter` 事件通道）。
 5. **无技能时优雅降级**：没有任何技能目录/文件时，不注册 `Skill` 工具，也不报错。
 
 ### 1.4 非目标（v1 明确不做）
@@ -106,7 +106,7 @@ public class Skills {   // 独立的加载器，可脱离 Builder 单独取元�
 **关键结论（决定了下面的装配方式）**：
 
 - `SkillsTool.Builder.build()` 返回的就是一个标准 `ToolCallback`（工具名 `Skill`），
-  可以像现有 6 个工具一样，用 `ToolEventCallback` 装饰后交给 `ChatClient.defaultTools(...)`。
+  可以像现有 6 个工具一样，用 `ToolCallbackAdapter` 装饰后交给 `ChatClient.defaultTools(...)`。
 - `Skills.loadDirectory(...)` 能**单独**把技能加载成 `List<Skill>`，从而拿到每个技能的
   `name()` 和 `frontMatter().get("description")`——这正是 `/skills` 命令列清单所需的元数据。
 
@@ -129,7 +129,7 @@ public class Skills {   // 独立的加载器，可脱离 Builder 单独取元�
 | 是否预置内置技能 | **不预置**（无 classpath 内置层） | 技能应由使用者按需提供，不把某种规范强加给所有项目 |
 | 同名技能优先级 | **项目级 > 用户级**（后加载覆盖同名） | 越「近」越具体，项目可覆盖个人默认 |
 | 工具注册时机 | **仅当至少加载到 1 个技能时**才注册 `Skill` 工具 | 空 `<available_skills>` 只会污染上下文、误导模型 |
-| 工具事件可见性 | 用 `ToolEventCallback` 装饰，与其余 6 工具一致 | 让「技能被调用」在 TUI 出现一行工具活动，用户可感知 |
+| 工具事件可见性 | 用 `ToolCallbackAdapter` 装饰，与其余 6 工具一致 | 让「技能被调用」在 TUI 出现一行工具活动，用户可感知 |
 | 用户入口 | 新增只读命令 **`/skills`**（列 name + description + 来源层） | 技能是模型自主调用的；用户需要的是「知道有哪些技能可用」 |
 | 是否支持手动注入 | v1 **不做** `/skill <name>` | 保持最小；模型自主调用已覆盖主要场景，手动注入留待 v2 |
 | 装配位置 | 全部落在 `AgentTools.build`，产物经 `AgentRuntime` 上抛 | 与现有工具/记忆装配同址，接缝一致 |

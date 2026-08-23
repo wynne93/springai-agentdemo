@@ -8,7 +8,7 @@
 
 **v1 单飞约束（关键，回应评审）：一次只允许一个回合在飞。** 强制单飞：**非 `IDLE` 状态下 Enter 被忽略并在状态栏提示「上一回合进行中，Esc 取消后再输入」**——不做「提交前自动取消上一回合」（留给 v2）。这样 `CodeTuiView` 只需持有单个 `Disposable`、Esc 取消当前回合即可。单飞是 UX 与「单个 Disposable」的简化，**不再是 Todo 正确性的前提**（见下）。判据数据源是 `ConversationState` 的状态位（headless 可测）。
 
-**Todo turnId 靠 toolContext 绑定、不靠单飞（关键修订，回应二次评审）：** 早先设计让 Todo 闭包读实时 `activeTurnId.get()`，这在「Esc 取消后立刻重新提交」时会串轮——`dispose()` 不保证真停后端（§6），旧回合被孤儿化的工具线程仍可能触发 `todoEventHandler`，而此时 `activeTurnId` 已前进到新回合，旧 Todo 遂被误标成新 turnId 污染对话；且 `dispose()` 会退订，靠等终态回调「解锁」也不可靠（`doOnComplete/doOnError` 在取消时不触发）。**修正：Todo 事件的 turnId 与其它工具事件同源，从 `toolContext` 取**——`ToolEventCallback` 在调用被装饰工具期间用 `ThreadLocal<Long>` 记下当前 turnId（来自 `ToolContext`），`TodoWriteTool` 的 `todoEventHandler` 在**同线程同步**触发时读该 ThreadLocal。于是 Todo 永远带着「真正执行它的那个回合」的 turnId，被 `acceptingTurnId` 过滤器正确丢弃——**即便后端不停、即便回合并发也不串**。（⚠️ 前提：`todoEventHandler` 是在工具 `call` 内**同步**触发的；Task 6/7 spike 顺手确认这一点，若为异步派发则该 ThreadLocal 失效、需回退到 per-turn handler 方案。）
+**Todo turnId 靠 toolContext 绑定、不靠单飞（关键修订，回应二次评审）：** 早先设计让 Todo 闭包读实时 `activeTurnId.get()`，这在「Esc 取消后立刻重新提交」时会串轮——`dispose()` 不保证真停后端（§6），旧回合被孤儿化的工具线程仍可能触发 `todoEventHandler`，而此时 `activeTurnId` 已前进到新回合，旧 Todo 遂被误标成新 turnId 污染对话；且 `dispose()` 会退订，靠等终态回调「解锁」也不可靠（`doOnComplete/doOnError` 在取消时不触发）。**修正：Todo 事件的 turnId 与其它工具事件同源，从 `toolContext` 取**——`ToolCallbackAdapter` 在调用被装饰工具期间用 `ThreadLocal<Long>` 记下当前 turnId（来自 `ToolContext`），`TodoWriteTool` 的 `todoEventHandler` 在**同线程同步**触发时读该 ThreadLocal。于是 Todo 永远带着「真正执行它的那个回合」的 turnId，被 `acceptingTurnId` 过滤器正确丢弃——**即便后端不停、即便回合并发也不串**。（⚠️ 前提：`todoEventHandler` 是在工具 `call` 内**同步**触发的；Task 6/7 spike 顺手确认这一点，若为异步派发则该 ThreadLocal 失效、需回退到 per-turn handler 方案。）
 
 **视图不落 transcript（关键，回应评审）：** `CodeTuiView` 的 Enter 只做「`submit(text)` + 清空输入缓冲」，**绝不直接把用户行写进 transcript**；用户行统一由 `AgentListener.onUserMessage` 落库。这样从骨架期（Task 3 用回显 `SubmitHandler` 桩，桩自己落 transcript）到接真 agent（Task 8）视图代码零改动、绝不重复显示。
 
@@ -548,7 +548,7 @@ public interface AgentListener {
 1. **并发无异常/一致快照**：起 N 个线程狂写 `onAssistantToken(turn, ...)`，主线程反复 `transcriptSnapshot()`，全程无 `ConcurrentModificationException`，最终 token 数 == 写入数。
 2. **取消过滤**：`onTurnStarted(1)` 后追加若干 token；`cancelCurrent()`（或 `onTurnStarted(2)` 切走）后，再来 `onAssistantToken(1, ...)` 的迟到 token 被丢弃——断言取消后 transcript 不再增长。
 3. **运行态**：`onToolStarted` → 状态 `RUNNING_TOOL`；`onTurnComplete` → `IDLE`。
-4. **单飞判据（回应评审①）**：初始 `isIdle()==true`；`onTurnStarted(1)` 后 `isIdle()==false`（View 据此在 Enter 时忽略新输入）；`onTurnComplete(1)`/`onError(1,..)`/`cancelCurrent()` 任一后 `isIdle()==true` 恢复可提交。这是 v1「一次只允许一个回合在飞」的数据源，配合 `CodeTuiView` 的 Enter guard 与单个 `Disposable`。（注：Todo 不串轮已由 Task 5 的 `ToolEventCallback` ThreadLocal 从根上保证，**不依赖**本判据——见总纲「Todo turnId 靠 toolContext 绑定」。）
+4. **单飞判据（回应评审①）**：初始 `isIdle()==true`；`onTurnStarted(1)` 后 `isIdle()==false`（View 据此在 Enter 时忽略新输入）；`onTurnComplete(1)`/`onError(1,..)`/`cancelCurrent()` 任一后 `isIdle()==true` 恢复可提交。这是 v1「一次只允许一个回合在飞」的数据源，配合 `CodeTuiView` 的 Enter guard 与单个 `Disposable`。（注：Todo 不串轮已由 Task 5 的 `ToolCallbackAdapter` ThreadLocal 从根上保证，**不依赖**本判据——见总纲「Todo turnId 靠 toolContext 绑定」。）
 
 `ConversationState`（在 Task 3 已建最小版）本 Task**扩充**为实现 `AgentListener`（视图读、Agent 写），**保留** Task 3 的 `isIdle()/status()/cancelCurrent()/transcript/输入缓冲`。新增字段：`volatile long acceptingTurnId`、流式助手行缓冲、`List<String> todo`。所有跨线程读写 `synchronized`/`volatile`。迟到过滤：任何带 turnId 的写入前先 `if (turnId != acceptingTurnId) return;`。状态机：`onTurnStarted(t)` → `acceptingTurnId=t; status=THINKING`；`onToolStarted` → `RUNNING_TOOL`；`onToolFinished` → `THINKING`；`onTurnComplete`/`onError` → `IDLE`。`cancelCurrent()`（Esc）→ `acceptingTurnId=-1`（不再匹配任何回合）且 `status=IDLE`。
 
@@ -579,13 +579,13 @@ git commit -m "feat(code-tui): AgentListener 接缝 + 线程安全 ConversationS
 
 ---
 
-## Task 5（里程碑 2·TDD）: `ToolEventCallback` 装饰器（从 ToolContext 取 turnId）
+## Task 5（里程碑 2·TDD）: `ToolCallbackAdapter` 装饰器（从 ToolContext 取 turnId）
 
 **Files:**
 - Create: `.../codetui/agent/ToolEventCallback.java`
 - Create: `.../test/.../agent/ToolEventCallbackTest.java`
 
-- [ ] **Step 1: 先写 `ToolEventCallbackTest`**（spec §11「工具装饰器异常」）
+- [ ] **Step 1: 先写 `ToolCallbackAdapterTest`**（spec §11「工具装饰器异常」）
 
 用一个假的 `ToolCallback` delegate（`getToolDefinition()` 返回定名、`call` 可正常返回或抛异常），断言：
 1. 正常路径：`call(input, toolContext{turnId=7})` → 先 `onToolStarted(7, name, input)`、后 `onToolFinished(7, name, output, true)`，返回值透传。
@@ -593,7 +593,7 @@ git commit -m "feat(code-tui): AgentListener 接缝 + 线程安全 ConversationS
 3. turnId 缺失兜底：`toolContext` 无 `turnId` 时用约定默认（如 `-1`），不 NPE。
 4. **ThreadLocal 绑定（回应二次评审：Todo 不串轮的根**）：delegate 的 `call` 内部读 `ToolEventCallback.currentTurnId()` 应等于本次 `toolContext` 的 turnId（如 7）；`call` 返回后 `currentTurnId()` 恢复为外层值（嵌套安全）。这条钉住「Todo 事件从 toolContext 取 turnId、与 token/工具事件同源」。
 
-- [ ] **Step 2: 实现 `ToolEventCallback`**（仿 `LoggingSkillCallback`：`implements ToolCallback`，代理 `getToolDefinition()`/`call(String)`/`call(String,ToolContext)`）
+- [ ] **Step 2: 实现 `ToolCallbackAdapter`**（仿 `LoggingSkillCallback`：`implements ToolCallback`，代理 `getToolDefinition()`/`call(String)`/`call(String,ToolContext)`）
 
 ```java
 package com.example.springai.codetui.agent;
@@ -779,7 +779,7 @@ public final class CodingAgent implements SubmitHandler {
   2. **工具循环可观察**：让它「读一个临时文件」，断言收到 `onToolStarted/onToolFinished`（经装饰器）。
   3. **多轮记忆**：第 2 轮引用第 1 轮内容，断言模型答复体现记忆（同 sessionId）；观察工具中间消息是否入库（参考 `springai-agent-demo/.../ToolMemoryAdvisorDemo.java` 关于 advisor 顺序的现象），把结论记进测试注释。
   4. **取消**：submit 后立刻 `dispose()`，断言 **UI 层**「取消后不再追加 token」通过（硬指标）；后端是否真停**观察并记录**（不作硬验收，与 spec §6 两层取消一致）。
-  5. **Todo turnId 正确（回应二次评审）**：让它列一个多步计划以强制触发 `TodoWrite`，断言 `onTodoUpdated(turnId, ...)` 的 turnId **等于当前回合且非 `-1`**——这实测钉死「`todoEventHandler` 同线程同步触发、`ToolEventCallback` 的 ThreadLocal 生效」（[计划:11] 遗留的唯一假设）；再 `dispose()` 取消后提交新回合，断言旧回合迟到的 Todo 被 `acceptingTurnId` 过滤、不污染新回合。**若观察到 turnId 为 `-1` 或串到新回合**，说明 handler 是异步派发、ThreadLocal 失效 → 回退 per-turn handler（见总纲「Todo turnId 靠 toolContext 绑定」修订），修好再进里程碑 3。
+  5. **Todo turnId 正确（回应二次评审）**：让它列一个多步计划以强制触发 `TodoWrite`，断言 `onTodoUpdated(turnId, ...)` 的 turnId **等于当前回合且非 `-1`**——这实测钉死「`todoEventHandler` 同线程同步触发、`ToolCallbackAdapter` 的 ThreadLocal 生效」（[计划:11] 遗留的唯一假设）；再 `dispose()` 取消后提交新回合，断言旧回合迟到的 Todo 被 `acceptingTurnId` 过滤、不污染新回合。**若观察到 turnId 为 `-1` 或串到新回合**，说明 handler 是异步派发、ThreadLocal 失效 → 回退 per-turn handler（见总纲「Todo turnId 靠 toolContext 绑定」修订），修好再进里程碑 3。
 
 - [ ] **Step 3: 跑 spike（有 key 时）**
 
@@ -891,7 +891,7 @@ mvn -q -pl springai-code-tui -am package
 mvn -q -pl springai-code-tui test    # 单测全绿；CodingAgentSpikeTest 因 @EnabledIfEnvironmentVariable 在无 DEEPSEEK_API_KEY 时自动跳过（不是失败）
 ```
 
-预期：`BUILD SUCCESS`；`ConversationStateTest`/`AgentListenerCancelTest`/`ToolEventCallbackTest`/`AgentToolsSecurityTest`/`CodeTuiApplicationGateTest` 全绿；`CodingAgentSpikeTest` 有 key 则跑、无 key 则 skipped。
+预期：`BUILD SUCCESS`；`ConversationStateTest`/`AgentListenerCancelTest`/`ToolCallbackAdapterTest`/`AgentToolsSecurityTest`/`CodeTuiApplicationGateTest` 全绿；`CodingAgentSpikeTest` 有 key 则跑、无 key 则 skipped。
 
 - [ ] **Step 2: 自检**（占位符扫描 + 类型一致 + spec 覆盖）
   - `grep -rn "TODO\|FIXME\|以 javap 为准\|见 Step" springai-code-tui/src` → 确认所有 ⚠️ 核实点已落实、无残留占位。
@@ -918,6 +918,6 @@ git add -A && git commit -m "chore(code-tui): v1 收尾——全测试绿 + 自�
 ## 关键风险提示（执行时留意）
 - **里程碑 1 有闸门**（Task 3 Step 6）：`[被动重绘自检]` 不按键也每秒自动刷出——这是流式 UI 的运行时地基，`javap` 核不了；不过则停在里程碑1 换 `runLater`/`runOnRenderThread`，**不带未验假设进 Task 4~8**。
 - **里程碑 2 spike 是闸门**（Task 7）：流式+工具+记忆+取消未实测通过，**不进** Task 8。
-- **Todo turnId 不串轮靠 ThreadLocal**（Task 5，二次评审修订）：Todo 事件的 turnId 从 `toolContext` 经 `ToolEventCallback` 的 `ThreadLocal` 取，与 token/工具事件同源；单飞只为 UX，不再是 Todo 正确性前提。⚠️ 唯一残余假设：`TodoWriteTool.todoEventHandler` 在工具 `call` 内**同步**触发——Task 6/7 spike 确认，若异步则回退 per-turn handler。
+- **Todo turnId 不串轮靠 ThreadLocal**（Task 5，二次评审修订）：Todo 事件的 turnId 从 `toolContext` 经 `ToolCallbackAdapter` 的 `ThreadLocal` 取，与 token/工具事件同源；单飞只为 UX，不再是 Todo 正确性前提。⚠️ 唯一残余假设：`TodoWriteTool.todoEventHandler` 在工具 `call` 内**同步**触发——Task 6/7 spike 确认，若异步则回退 per-turn handler。
 - **不臆测 API**：TamboUI 循环/按键/Frame/Rect/Paragraph 签名本会话已 `javap` 钉死（见 Task 3 抬头）。**本次评审已额外核实为绿、可不再当风险**：`Paragraph implements dev.tamboui.widget.Widget` ✓、`ToolContext.getContext():Map<String,Object>` ✓。剩余仍需 `javap` 核实——Task 6（5 工具 + `AgentEnvironment` 签名、`ToolCallbacks.from` 位置）、Task 7（`ChatClientResponse` 文本抽取）。
 - **安全是方案 B（诚实降级）**，不是真安全：Shell/Grep/Glob 不受限须在横幅/README/记录性测试三处钉死。

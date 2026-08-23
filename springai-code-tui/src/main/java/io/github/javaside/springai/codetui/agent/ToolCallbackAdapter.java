@@ -8,9 +8,9 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** ToolCallback 装饰器：执行前后经 AgentListener 发工具事件；turnId 从 ToolContext 取。
  *  另用 ThreadLocal 把「正在执行的工具」的 turnId 暴露给同线程同步触发的 TodoWriteTool.todoEventHandler，
  *  使 Todo 事件与其它工具事件同源（不读实时 activeTurnId，取消/并发下不串轮）。 */
-public final class ToolEventCallback implements ToolCallback {
-    static final String TURN_ID_KEY = "turnId";
-    static final String TASK_ID_KEY = "taskId";
+public final class ToolCallbackAdapter implements ToolCallback {
+    public static final String TURN_ID_KEY = "turnId";
+    public static final String TASK_ID_KEY = "taskId";
 
     /** TodoWriteTool 的 todoEventHandler 只收 Todos、拿不到 turnId；用 ThreadLocal 把当前执行回合的
      *  turnId 传给同线程同步触发的 handler。 */
@@ -23,7 +23,7 @@ public final class ToolEventCallback implements ToolCallback {
     private final ToolCallback delegate;
     private final AgentListener listener;
 
-    public ToolEventCallback(ToolCallback delegate, AgentListener listener) {
+    public ToolCallbackAdapter(ToolCallback delegate, AgentListener listener) {
         this.delegate = delegate;
         this.listener = listener;
     }

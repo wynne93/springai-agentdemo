@@ -13,13 +13,13 @@ import org.springframework.ai.session.compaction.CompactionStrategy;
  * {@link CompactionResult} 的 {@code eventsRemoved()} / {@code tokensEstimatedSaved()}；
  * 失败时发 failed 并<b>重抛</b>（不吞异常，让上层 SessionService 的事务/版本语义照常）。
  */
-public final class NotifyingCompactionStrategy implements CompactionStrategy {
+public final class NotifyingCompactionStrategyAdapter implements CompactionStrategy {
 
     private final CompactionStrategy delegate;
     private final AgentListener listener;
     private final String reason;   // "auto" | "manual"
 
-    public NotifyingCompactionStrategy(CompactionStrategy delegate, AgentListener listener, String reason) {
+    public NotifyingCompactionStrategyAdapter(CompactionStrategy delegate, AgentListener listener, String reason) {
         this.delegate = delegate;
         this.listener = listener;
         this.reason = reason;

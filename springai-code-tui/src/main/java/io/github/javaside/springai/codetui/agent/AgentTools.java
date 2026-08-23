@@ -1,7 +1,7 @@
 package io.github.javaside.springai.codetui.agent;
 
 import io.github.javaside.springai.codetui.agent.agentListener.AgentListener;
-import io.github.javaside.springai.codetui.agent.compactionStrategy.NotifyingCompactionStrategy;
+import io.github.javaside.springai.codetui.agent.compactionStrategy.NotifyingCompactionStrategyAdapter;
 import io.github.javaside.springai.codetui.agent.llmProvider.LlmProvider;
 import io.github.javaside.springai.codetui.agent.llmProvider.ProviderRegistry;
 import io.github.javaside.springai.codetui.agent.record.SkillInfo;
@@ -12,6 +12,7 @@ import io.github.javaside.springai.codetui.agent.subAgent.SubagentRunner;
 import io.github.javaside.springai.codetui.agent.subAgent.SubagentTool;
 import io.github.javaside.springai.codetui.agent.tool.ReloadableSkillTool;
 import io.github.javaside.springai.codetui.agent.tool.TodoWriteToolAdapter;
+import org.jspecify.annotations.NonNull;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
 import org.springaicommunity.agent.tools.FileSystemTools;
 import org.springaicommunity.agent.tools.GlobTool;
@@ -46,7 +47,7 @@ import java.util.Map;
 /**
  * AgentTools —— 组装编码 Agent 用的 {@link ChatClient} 的工厂。
  *
- * <p>把 6 个社区工具（FileSystem/Shell/Grep/Glob/TodoWrite/SmartWebFetch）用 {@link ToolEventCallback} 装饰后
+ * <p>把 6 个社区工具（FileSystem/Shell/Grep/Glob/TodoWrite/SmartWebFetch）用 {@link ToolCallbackAdapter} 装饰后
  * 注册进 ChatClient，并配上 {@link SessionMemoryAdvisor} 会话记忆与 {@link AgentEnvironment} 环境系统提示。
  *
  * <p><b>网页获取（SmartWebFetch）</b>：{@link SmartWebFetchTool} 抓取网页→转 Markdown→用一个「裸」ChatClient
@@ -60,7 +61,7 @@ import java.util.Map;
  *
  * <p><b>返回 {@link AgentRuntime}</b>：{@link #build} 除了 {@link ChatClient}，还暴露 {@link SessionService}
  * 与一份更激进的手动压缩策略（保留 20 事件），供上层 {@code /compact} 命令直接触发压缩。
- * <b>自动</b>（阈值触发）路径的策略用 {@link NotifyingCompactionStrategy} 包一层，使原本静默的压缩对 UI 可见；
+ * <b>自动</b>（阈值触发）路径的策略用 {@link NotifyingCompactionStrategyAdapter} 包一层，使原本静默的压缩对 UI 可见；
  * <b>手动</b>路径的策略<b>不</b>包装——它由 {@code CodingAgent.runCompaction} 直接调用并自行上报事件，
  * 若再包装会重复上报同一次压缩。
  *
@@ -73,7 +74,7 @@ import java.util.Map;
  *
  * <p><b>turnId 走 ThreadLocal</b>：TodoWriteTool 的 todoEventHandler 只收 {@link Todos}、拿不到 turnId，
  * 而 handler 是在工具 call 内<b>同线程同步</b>触发的，所以直接读
- * {@link ToolEventCallback#currentTurnId()}（当前正在执行工具的回合），不读实时 activeTurnId，
+ * {@link ToolCallbackAdapter#currentTurnId()}（当前正在执行工具的回合），不读实时 activeTurnId，
  * 取消/并发下不会串轮。因此 {@link #build} <b>没有</b> activeTurnId 参数。
  *
  * <p><b>安全边界（设计方案 B）</b>：只有 FileSystemTools 有强制的目录边界；Shell/Grep/Glob 在技术上
@@ -161,12 +162,12 @@ public final class AgentTools {
      */
     public record AgentRuntime(Map<String, ChatClient> clients,
                                String activeProviderId,
-                               SessionService sessionService,
-                               SessionRepository sessionRepository,
-                               CompactionStrategy manualStrategy,
-                               TokenCountEstimator tokenCountEstimator,
+                               SessionService sessionService, // org.springframework.ai.session.SessionService
+                               SessionRepository sessionRepository,// org.springframework.ai.session.SessionRepository
+                               CompactionStrategy manualStrategy, // org.springframework.ai.session.compaction.CompactionStrategy
+                               TokenCountEstimator tokenCountEstimator, // org.springframework.ai.tokenizer.TokenCountEstimator
                                List<SkillInfo> skills,
-                               ToolCallback skillTool,
+                               ToolCallback skillTool, // org.springframework.ai.tool.ToolCallback
                                ReloadableSkillTool reloadableSkill) {
 
         /** 便捷：激活 provider 的 ChatClient（单-provider 用法与旧代码兼容）。 */
@@ -183,17 +184,12 @@ public final class AgentTools {
      *                 不在装配期绑定，故此处不需要 sessionId 参数。
      */
     public static AgentRuntime build(ProviderRegistry registry, Path root, AgentListener listener) {
-        FileSystemTools fs = FileSystemTools.builder().allowedDirectory(root).build();
-        ShellTools sh = ShellTools.builder().build();
-        GrepTool grep = GrepTool.builder().workingDirectory(root).build();
-        GlobTool glob = GlobTool.builder().workingDirectory(root).build();
-        TodoWriteTool todo = TodoWriteTool.builder()
-                // turnId/taskId 均走 ThreadLocal（handler 在工具 call 内同步触发），不读实时 activeTurnId。
-                // taskId 区分层级：null=控制器计划 todo（任务面板）；非空=子 agent 内部 todo（todo 面板）。
-                .todoEventHandler(todos ->
-                        listener.onTodoUpdated(ToolEventCallback.currentTurnId(),
-                                ToolEventCallback.currentTaskId(), toLines(todos)))
-                .build();
+        /** ========================== 构建各种的tools ======================================= **/
+        FileSystemTools fileSystemTools = FileSystemTools.builder().allowedDirectory(root).build();
+        ShellTools shellTools = ShellTools.builder().build();
+        GrepTool grepTool = GrepTool.builder().workingDirectory(root).build();
+        GlobTool globTool = GlobTool.builder().workingDirectory(root).build();
+
 
         // 「裸」ChatClient（同模型、无工具、无记忆 advisor）：一份复用给两处内部 LLM 调用——
         // ① SmartWebFetch 的网页内容 AI 抽取；② 会话历史的滚动摘要。都不能带工具/记忆，否则会递归触发工具或记忆循环。
@@ -202,7 +198,7 @@ public final class AgentTools {
         ChatClient auxClient = ChatClient.builder(activeModel).build();
 
         // 网页获取工具：抓取→转 Markdown→按 prompt AI 抽取。关掉 domainSafetyCheck（见类注释）。
-        SmartWebFetchTool webFetch = SmartWebFetchTool.builder(auxClient)
+        SmartWebFetchTool smartWebFetchTool = SmartWebFetchTool.builder(auxClient)
                 .domainSafetyCheck(false)
                 .maxContentLength(150_000)   // v4-flash 上下文 1M，抽取前允许更长原文
                 .maxRetries(3)
@@ -214,7 +210,7 @@ public final class AgentTools {
         ReloadableSkillTool reloadableSkill = new ReloadableSkillTool(root);
 
         // 反问工具：QuestionHandler 阻塞工具线程、等 UI 经 onQuestionAsked → responder 应答（见 UserQuestionBridge）。
-        AskUserQuestionTool askTool = AskUserQuestionTool.builder()
+        AskUserQuestionTool askUserQuestionTool = AskUserQuestionTool.builder()
                 .questionHandler(new UserQuestionBridge(listener))
                 .answersValidation(true)   // UI 顺序问询保证答案完整，故校验开着也不会触发异常
                 .build();
@@ -225,56 +221,69 @@ public final class AgentTools {
         // TodoWrite 不直接注册库工具：其入参双层 todos 嵌套让模型频繁绑定失败（见 TodoWriteToolAdapter 类注释）。
         // 改注册薄适配器（入参 List<TodoItem>、schema 单层），并把库工具那套完整的面向模型描述原样移植过来，
         // 使模型看到的使用指引与升级前一致——唯一变化只是入参 schema 的形状。
+        TodoWriteTool todoWriteTool = TodoWriteTool.builder()
+                // turnId/taskId 均走 ThreadLocal（handler 在工具 call 内同步触发），不读实时 activeTurnId。
+                // taskId 区分层级：null=控制器计划 todoWriteTool（任务面板）；非空=子 agent 内部 todoWriteTool（todoWriteTool 面板）。
+                .todoEventHandler(todos -> {
+                    listener.onTodoUpdated(
+                            ToolCallbackAdapter.currentTurnId(),
+                            ToolCallbackAdapter.currentTaskId(),
+                            toLines(todos)
+                    );
+                })
+                .build();
         ToolCallback todoCallback = describedAs(
-                ToolCallbacks.from(new TodoWriteToolAdapter(todo))[0],
-                ToolCallbacks.from(todo)[0].getToolDefinition().description());
+                ToolCallbacks.from(new TodoWriteToolAdapter(todoWriteTool))[0],
+                ToolCallbacks.from(todoWriteTool)[0].getToolDefinition().description()
+        );
 
-        List<ToolCallback> all = new ArrayList<>(Arrays.asList(ToolCallbacks.from(fs, sh, grep, glob, webFetch, askTool)));
+        List<ToolCallback> all = new ArrayList<>(Arrays.asList(
+                ToolCallbacks.from(fileSystemTools, shellTools, grepTool, globTool, smartWebFetchTool, askUserQuestionTool)
+        ));
         all.add(todoCallback);      // 薄适配器版 TodoWrite（名仍为 "TodoWrite"）
         all.add(reloadableSkill);   // 始终注册可重载 Skill 代理（支持运行期 /reload 从零热加载）
-        ToolCallback[] decorated = new ToolCallback[all.size()];
+
+
+        /** ===== 封装成作者自己的ToolEventCallback ToolCallback 装饰器：执行前后经 AgentListener 发工具事件；turnId 从 ToolContext 取 ======================================= **/
+        ToolCallback[] decoratedToolEventCallback = new ToolCallback[all.size()];
         ToolCallback decoratedSkillTool = null;   // 手动 /skill 路径复用同一个被装饰实例（事件/返回与自动路径一致）
         for (int i = 0; i < all.size(); i++) {
-            decorated[i] = new ToolEventCallback(all.get(i), listener);
+            decoratedToolEventCallback[i] = new ToolCallbackAdapter(all.get(i), listener);
             if (all.get(i) == reloadableSkill) {
-                decoratedSkillTool = decorated[i];   // 记住 Skill 代理装饰后的实例（供手动 /skill 复用）
+                decoratedSkillTool = decoratedToolEventCallback[i];   // 记住 Skill 代理装饰后的实例（供手动 /skill 复用）
             }
         }
 
-        // 子 agent（Task 工具）：SubagentRunner 复用「已装饰、带边界」的工具列表 decorated；
+        // 子 agent（Task 工具）：SubagentRunner 复用「已装饰、带边界」的工具列表 decoratedToolEventCallback；
         // Task 工具本身也用 ToolEventCallback 装饰，故委派本身在主流显示为一行。
-        List<ToolCallback> decoratedList = List.of(decorated);
+        List<ToolCallback> decoratedList = List.of(decoratedToolEventCallback);
         SubagentRunner subagentRunner = new SubagentRunner(registry, decoratedList, listener);
+
         Map<String, SubagentSpec> subagentSpecs = SubagentLoader.loadBuiltins();
         ToolCallback taskTool = SubagentTool.create(subagentSpecs,
                 (spec, prompt, desc, turnIgnored) ->
                         // 真实 parentTurnId 从 ThreadLocal 取（Task 工具被 ToolEventCallback 装饰，call 时已压入）
-                        subagentRunner.run(spec, prompt, desc, ToolEventCallback.currentTurnId()));
-        ToolCallback decoratedTaskTool = new ToolEventCallback(taskTool, listener);
+                        subagentRunner.run(spec, prompt, desc, ToolCallbackAdapter.currentTurnId()));
+        ToolCallback decoratedTaskTool = new ToolCallbackAdapter(taskTool, listener);
 
         // 主 agent 工具集 = 原装饰工具 + Task 工具
-        Object[] toolsWithTask = new Object[decorated.length + 1];
-        System.arraycopy(decorated, 0, toolsWithTask, 0, decorated.length);
-        toolsWithTask[decorated.length] = decoratedTaskTool;
+        Object[] toolsWithTask = new Object[decoratedToolEventCallback.length + 1];
+        System.arraycopy(decoratedToolEventCallback, 0, toolsWithTask, 0, decoratedToolEventCallback.length);
+        toolsWithTask[decoratedToolEventCallback.length] = decoratedTaskTool;
 
         // 事件溯源会话记忆：文件仓库（<root>/.codetui/sessions/，按项目隔离，进程重启后可加载）+ 「回合/token 感知」压缩。
         // 单独持有仓库引用：取消回合时 CodingAgent 用它 replaceEvents 裁剪半截历史（DefaultSessionService 不暴露该能力）。
-        SessionRepository sessionRepository =
-                new FileSessionRepository(root.resolve(".codetui").resolve("sessions"));
-        SessionService sessionService = DefaultSessionService.builder()
-                .sessionRepository(sessionRepository)
-                .build();
+        SessionRepository sessionRepository = new FileSessionRepository(root.resolve(".codetui").resolve("sessions"));
+        SessionService sessionService = DefaultSessionService.builder().sessionRepository(sessionRepository).build();
 
         // token 估算器（JTokkit，spring-ai-commons 提供）：trigger 与摘要策略都需显式提供，无默认值。
         TokenCountEstimator tokenCountEstimator = new JTokkitTokenCountEstimator();
 
         // 自动压缩策略（保留 120）→ 包一层通知装饰器（reason="auto"），让阈值触发的压缩对 UI 可见。
         // 自动路径由 advisor 内部调用、拿不到返回值，必须靠装饰器上报 started/finished/failed。
-        CompactionStrategy autoStrategy = new NotifyingCompactionStrategy(
-                RecursiveSummarizationCompactionStrategy.builder(auxClient)
-                        .maxEventsToKeep(MAX_EVENTS_TO_KEEP)
-                        .tokenCountEstimator(tokenCountEstimator).build(),
-                listener, "auto");
+        RecursiveSummarizationCompactionStrategy compactionStrategy = RecursiveSummarizationCompactionStrategy.builder(auxClient)
+                .maxEventsToKeep(MAX_EVENTS_TO_KEEP).tokenCountEstimator(tokenCountEstimator).build();
+        CompactionStrategy autoStrategy = new NotifyingCompactionStrategyAdapter(compactionStrategy, listener, "auto");
 
         // 手动压缩策略（保留 20，更激进）：<b>不</b>包装装饰器——手动路径由 {@code CodingAgent.runCompaction}
         // 直接调用 sessionService.compact 并拿到返回值自行上报生命周期事件；若再包装会导致失败被重复上报。
@@ -380,9 +389,9 @@ public final class AgentTools {
                     .name(d.name()).description(description).inputSchema(d.inputSchema()).build();
         }
 
-        @Override public ToolDefinition getToolDefinition() { return definition; }
-        @Override public String call(String toolInput) { return delegate.call(toolInput); }
-        @Override public String call(String toolInput, ToolContext toolContext) { return delegate.call(toolInput, toolContext); }
+        @Override public @NonNull ToolDefinition getToolDefinition() { return definition; }
+        @Override public @NonNull String call(@NonNull String toolInput) { return delegate.call(toolInput); }
+        @Override public @NonNull String call(@NonNull String toolInput, ToolContext toolContext) { return delegate.call(toolInput, toolContext); }
     }
 
     private static String statusMarker(Todos.Status status) {

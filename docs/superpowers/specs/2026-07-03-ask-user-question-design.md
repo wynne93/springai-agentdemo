@@ -48,7 +48,7 @@
   必须先翻译成纯 Java 记录（照 `SkillInfo` 镜像 `SkillsTool.Skill` 的先例）。
 - `ConversationState implements AgentListener`，是接缝落地端；`CodeTuiView` 每 tick 从它读交互状态
   （todos / queued / streaming / status / pickingModel / pickingSkill…），据此渲染面板并路由按键。
-- 工具经 `ToolEventCallback` 装饰后注册；装饰器在 `call` 前把 `turnId` 写入 `ThreadLocal`（`currentTurnId()`），
+- 工具经 `ToolCallbackAdapter` 装饰后注册；装饰器在 `call` 前把 `turnId` 写入 `ThreadLocal`（`currentTurnId()`），
   供同线程同步触发的 handler 读取（`TodoWriteTool.todoEventHandler` 就是这么拿 turnId 的）。
 - 取消（Esc→`dispose`）时 `CodingAgent.submit` 已有 `doOnCancel(rollbackTo(mark))`：把会话回滚到回合前快照，
   清掉悬空的 `assistant(tool_calls)`（否则下轮 400）。**本功能直接复用这套回滚**。

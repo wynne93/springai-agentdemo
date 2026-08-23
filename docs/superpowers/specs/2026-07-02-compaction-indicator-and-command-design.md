@@ -192,7 +192,7 @@ default void compact() {}
 
 ## 8. 测试
 
-- 单元：`NotifyingCompactionStrategy` 用假 delegate + 捕获型 listener，验证
+- 单元：`NotifyingCompactionStrategyAdapter` 用假 delegate + 捕获型 listener，验证
   started→finished（计数正确）与 started→failed（delegate 抛异常）。
 - 单元：`CodingAgent.compact()` 在有活跃 turn 时 no-op 且发系统提示（假
   SessionService）。

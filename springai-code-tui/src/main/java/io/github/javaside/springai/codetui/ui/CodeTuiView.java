@@ -86,7 +86,7 @@ public final class CodeTuiView extends InlineApp {
     private final ScrollbackPrinter printer;                        // scrollback 打印（欢迎/用户块/工具 diff/助手正文）
     private final ContextUsage ctxUsage;                             // 上下文用量追踪/报告（/context 报告 + 状态栏后缀）
     private final Path root;                                         // 工作区根目录（欢迎页展示）
-    private Disposable current;
+    private Disposable currentDisposable;
     private boolean pickingModel;                                    // /model 选择器是否激活
     private boolean pickingSkill;                                    // /skill 选择器是否激活
     private String pendingSkill;                                     // 已选技能名（可空）：显示为输入框上方标签，发送时随本条消息加载并清除
@@ -407,7 +407,7 @@ public final class CodeTuiView extends InlineApp {
         if (k.isCancel()) {
             boolean running = !state.isIdle();
             int dropped = state.queuedCount();
-            if (current != null) { current.dispose(); current = null; }
+            if (currentDisposable != null) { currentDisposable.dispose(); currentDisposable = null; }
             state.cancelCurrent();
             state.clearQueued();                         // 取消时一并清空排队消息
             state.setNotice(running || dropped > 0
@@ -587,7 +587,7 @@ public final class CodeTuiView extends InlineApp {
 
     /** 真正发起一个回合：提交给 agent（skill 可空——挂载技能则发送前注入正文）。仅当模型与上次不同时才打一行「⚙ 使用模型 X」（首个回合也会打）。 */
     private void dispatch(String text, String skill) {
-        current = onSubmit.submit(text, skill);
+        currentDisposable = onSubmit.submit(text, skill);
         String m = onSubmit.currentModel();
         if (!m.equals(lastShownModel)) {
             state.pushInfo("⚙ 使用模型 " + m);
@@ -803,7 +803,7 @@ public final class CodeTuiView extends InlineApp {
      */
     private void cancelTurnFor(AskRequest req, String notice) {
         req.responder().cancel();
-        if (current != null) { current.dispose(); current = null; }
+        if (currentDisposable != null) { currentDisposable.dispose(); currentDisposable = null; }
         state.cancelCurrent();
         state.clearQueued();
         state.setNotice(notice);

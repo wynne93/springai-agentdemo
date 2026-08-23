@@ -1,7 +1,7 @@
 package io.github.javaside.springai.codetui.agent;
 
 import io.github.javaside.springai.codetui.agent.agentListener.AgentListener;
-import io.github.javaside.springai.codetui.agent.compactionStrategy.NotifyingCompactionStrategy;
+import io.github.javaside.springai.codetui.agent.compactionStrategy.NotifyingCompactionStrategyAdapter;
 import io.github.javaside.springai.codetui.agent.record.AskRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.session.compaction.CompactionRequest;
@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** NotifyingCompactionStrategy：成功路径发 started→finished（转发 result 的计数），失败路径发 started→failed 并重抛。 */
-class NotifyingCompactionStrategyTest {
+class NotifyingCompactionStrategyAdapterTest {
 
     /** 只记录压缩三事件的最小 listener，其余接缝方法留空。 */
     private static final class CapturingListener implements AgentListener {
@@ -50,7 +50,7 @@ class NotifyingCompactionStrategyTest {
         AtomicReference<CompactionRequest> seen = new AtomicReference<>();
         CompactionStrategy spyDelegate = req -> { seen.set(req); return result; };
 
-        var notifying = new NotifyingCompactionStrategy(spyDelegate, listener, "manual");
+        var notifying = new NotifyingCompactionStrategyAdapter(spyDelegate, listener, "manual");
         CompactionResult out = notifying.compact(null);   // spyDelegate 忽略入参，可传 null
 
         assertEquals(result, out, "应透传 delegate 的结果");
@@ -65,7 +65,7 @@ class NotifyingCompactionStrategyTest {
         CapturingListener listener = new CapturingListener();
         CompactionStrategy delegate = req -> { throw new RuntimeException("boom"); };
 
-        var notifying = new NotifyingCompactionStrategy(delegate, listener, "auto");
+        var notifying = new NotifyingCompactionStrategyAdapter(delegate, listener, "auto");
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> notifying.compact(null));
         assertEquals("boom", ex.getMessage(), "异常应重抛");

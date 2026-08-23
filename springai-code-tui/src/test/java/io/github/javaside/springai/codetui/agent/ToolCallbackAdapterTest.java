@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  *    （证明 TodoWriteTool.todoEventHandler 同线程同步触发时能拿到正确的 turnId），
  *    call() 返回后恢复为调用前的值（顶层为 -1），保证嵌套/清理安全。
  */
-class ToolEventCallbackTest {
+class ToolCallbackAdapterTest {
 
     /** 手写录制型 AgentListener，不用 mock 框架。 */
     private static final class RecordingListener implements AgentListener {
@@ -66,7 +66,7 @@ class ToolEventCallbackTest {
             @Override public String call(String toolInput) { return call(toolInput, null); }
             @Override public String call(String toolInput, ToolContext toolContext) { return "OUT:" + toolInput; }
         };
-        ToolEventCallback cb = new ToolEventCallback(delegate, listener);
+        ToolCallbackAdapter cb = new ToolCallbackAdapter(delegate, listener);
 
         ToolContext ctx = new ToolContext(Map.of("turnId", 7L));
         String result = cb.call("in", ctx);
@@ -88,7 +88,7 @@ class ToolEventCallbackTest {
                 throw new RuntimeException("boom");
             }
         };
-        ToolEventCallback cb = new ToolEventCallback(delegate, listener);
+        ToolCallbackAdapter cb = new ToolCallbackAdapter(delegate, listener);
         ToolContext ctx = new ToolContext(Map.of("turnId", 7L));
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> cb.call("in", ctx));
@@ -108,7 +108,7 @@ class ToolEventCallbackTest {
             @Override public String call(String toolInput) { return call(toolInput, null); }
             @Override public String call(String toolInput, ToolContext toolContext) { return "OUT"; }
         };
-        ToolEventCallback cb = new ToolEventCallback(delegate, listener);
+        ToolCallbackAdapter cb = new ToolCallbackAdapter(delegate, listener);
 
         String result = cb.call("in", null);
 
@@ -128,19 +128,19 @@ class ToolEventCallbackTest {
             @Override public String call(String toolInput) { return call(toolInput, null); }
             @Override public String call(String toolInput, ToolContext toolContext) {
                 // 模拟 TodoWriteTool.todoEventHandler 在同线程同步触发时读取当前执行回合的 turnId
-                observedDuringCall.add(ToolEventCallback.currentTurnId());
+                observedDuringCall.add(ToolCallbackAdapter.currentTurnId());
                 return "OUT";
             }
         };
-        ToolEventCallback cb = new ToolEventCallback(delegate, listener);
+        ToolCallbackAdapter cb = new ToolCallbackAdapter(delegate, listener);
 
-        assertEquals(-1L, ToolEventCallback.currentTurnId(), "顶层调用前应为 -1");
+        assertEquals(-1L, ToolCallbackAdapter.currentTurnId(), "顶层调用前应为 -1");
 
         ToolContext ctx = new ToolContext(Map.of("turnId", 7L));
         cb.call("in", ctx);
 
         assertEquals(List.of(7L), observedDuringCall, "call() 执行期间 ThreadLocal 应暴露正在执行的 turnId");
-        assertEquals(-1L, ToolEventCallback.currentTurnId(), "call() 返回后应恢复为调用前的值");
+        assertEquals(-1L, ToolCallbackAdapter.currentTurnId(), "call() 返回后应恢复为调用前的值");
     }
 
     @Test
@@ -156,7 +156,7 @@ class ToolEventCallbackTest {
             @Override public String call(String toolInput) { return call(toolInput, null); }
             @Override public String call(String toolInput, ToolContext toolContext) { return "ok"; }
         };
-        ToolCallback probe = new ToolEventCallback(delegate, listener);
+        ToolCallback probe = new ToolCallbackAdapter(delegate, listener);
         probe.call("{}", new ToolContext(java.util.Map.of("turnId", 1L, "taskId", "task_42")));
         org.junit.jupiter.api.Assertions.assertEquals("task_42", seen.get());
     }

@@ -1,7 +1,7 @@
 package io.github.javaside.springai.codetui.agent;
 
 import io.github.javaside.springai.codetui.agent.agentListener.AgentListener;
-import io.github.javaside.springai.codetui.agent.compactionStrategy.NotifyingCompactionStrategy;
+import io.github.javaside.springai.codetui.agent.compactionStrategy.NotifyingCompactionStrategyAdapter;
 import io.github.javaside.springai.codetui.agent.llmProvider.LlmProvider;
 import io.github.javaside.springai.codetui.agent.llmProvider.ProviderRegistry;
 import io.github.javaside.springai.codetui.agent.record.ContextStats;
@@ -300,7 +300,7 @@ public final class CodingAgent implements SubmitHandler {
      * <p><b>本方法独占手动路径的三个生命周期事件</b>（started/finished/failed）：它<b>直接</b>调用
      * {@code sessionService.compact} 并拿到返回的 {@link CompactionResult} 自行上报，因此
      * {@code manualStrategy} 是<b>未包装</b>的裸策略（见 {@code AgentTools}）——若再套
-     * {@link NotifyingCompactionStrategy}，同一次失败会被「装饰器 + 本方法」重复上报。装饰器只服务于
+     * {@link NotifyingCompactionStrategyAdapter}，同一次失败会被「装饰器 + 本方法」重复上报。装饰器只服务于
      * 自动路径（advisor 内部调用、拿不到返回值）。
      *
      * <p>先发 started 再调用：保证即便压缩在进入策略前就抛异常（会话不存在 / I/O），UI 也已显示过「正在压缩」，

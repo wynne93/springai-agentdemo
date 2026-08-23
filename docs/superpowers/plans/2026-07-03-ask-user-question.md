@@ -523,7 +523,7 @@ import org.springaicommunity.agent.tools.AskUserQuestionTool;
         List<ToolCallback> all = new ArrayList<>(Arrays.asList(
                 ToolCallbacks.from(fs, sh, grep, glob, todo, webFetch, askTool)));
 ```
-（Skill 工具仍单独 `all.add(skills.tool())`，随后统一 `ToolEventCallback` 装饰的循环不变——`AskUserQuestionTool` 也会被装饰，故「⏺ AskUserQuestionTool」一行工具活动可见、且 `currentTurnId()` 对桥可用。）
+（Skill 工具仍单独 `all.add(skills.tool())`，随后统一 `ToolCallbackAdapter` 装饰的循环不变——`AskUserQuestionTool` 也会被装饰，故「⏺ AskUserQuestionTool」一行工具活动可见、且 `currentTurnId()` 对桥可用。）
 
 - [ ] **Step 3: 系统提示补一句引导**
 

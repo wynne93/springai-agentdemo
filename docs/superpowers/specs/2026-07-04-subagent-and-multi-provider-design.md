@@ -31,7 +31,7 @@
 
 4. **固定的 `TaskCall` schema 会诱导模型**。框架工具的输入 record 固定 6 字段 `(description, prompt, subagent_type, model, resume, run_in_background)`。套框架就得整份暴露给模型，包括 v1 不支持的 `run_in_background`/`resume`。自写工具 → 自己的精简 schema，v1 只留 `description`/`prompt`/`subagent_type`，不诱导模型用未实现的功能。
 
-5. **`ClaudeSubagentType` 便捷构建器有硬伤**（若走框架路径的话）：内部 `FileSystemTools.builder().build()` **不带 `allowedDirectory`**（逃出项目根边界），且**没有 builder 方法传入自定义工具**、无事件装饰。→ 无论如何都不能用它；工具必须我们自己持有（带 root 边界 + `ToolEventCallback`）。
+5. **`ClaudeSubagentType` 便捷构建器有硬伤**（若走框架路径的话）：内部 `FileSystemTools.builder().build()` **不带 `allowedDirectory`**（逃出项目根边界），且**没有 builder 方法传入自定义工具**、无事件装饰。→ 无论如何都不能用它；工具必须我们自己持有（带 root 边界 + `ToolCallbackAdapter`）。
 
 6. **内置 4 个 .md 不通用、在 jar 内不可原地改**：写死 "You are an agent for Claude Code, Anthropic's official CLI"，`tools` 用 Claude Code 工具名，部分带 `model: default`（会翻车）。→ 参照其职责**重写我们自己的通用 .md**（§4.4）。
 
@@ -88,7 +88,7 @@ interface LlmProvider {
 
 ### 4.2 主 agent 层改造
 
-**`AgentTools.build(...)`**：签名从收 `DeepSeekChatModel` 改为收 `LlmProvider`（或 `ProviderRegistry`）。`ChatClient.builder(provider.chatModel())` 构建；工具装饰、SessionMemory advisor、系统提示模板等**全部照旧**（provider 无关）。系统提示里的 `{AGENT_MODEL}` grounding 改为反映激活 provider + 模型。**新增**：把自写的 `SubagentTool`（§4.3）作为一个普通 `ToolCallback` 加入主 agent 工具集，同样用 `ToolEventCallback` 装饰（「Task 这次委派」在主流显示为一行）。
+**`AgentTools.build(...)`**：签名从收 `DeepSeekChatModel` 改为收 `LlmProvider`（或 `ProviderRegistry`）。`ChatClient.builder(provider.chatModel())` 构建；工具装饰、SessionMemory advisor、系统提示模板等**全部照旧**（provider 无关）。系统提示里的 `{AGENT_MODEL}` grounding 改为反映激活 provider + 模型。**新增**：把自写的 `SubagentTool`（§4.3）作为一个普通 `ToolCallback` 加入主 agent 工具集，同样用 `ToolCallbackAdapter` 装饰（「Task 这次委派」在主流显示为一行）。
 
 **`CodingAgent.submit(...)`**：`.options(DeepSeekChatOptions...)` 改为 `.options(activeProvider.options(model))`。`MODELS` 常量下沉到各 provider。`/model` 语义升级：跨 provider 列出所有可用模型，选中即 `registry.activate(providerId)` + 设定 model，主 agent 与子 agent 同时切换。
 
@@ -127,7 +127,7 @@ record SubagentSpec(
   1. 分配 `taskId`，发 `onSubagentStarted(parentTurnId, taskId, spec.name(), description)`。
   2. 取激活 provider 的 `ChatClient.Builder`，按 `spec.allowTools()`/`denyTools()` 过滤工具（**按 `getToolDefinition().name()` 精确匹配；因 .md 里已写本项目真实工具名，无需别名映射表**），system = `spec.systemPrompt()`（+ 预加载 skills），挂 `ToolCallAdvisor`。**不挂** SessionMemory advisor（子 agent 上下文独立）。
   3. **model 解析**：`spec.model()` 为空 → 激活 provider 默认模型；`provider:model` → 路由指定 provider（不可用则回退激活 provider）。经 `LlmProvider.options()`，**不用**框架那张 Anthropic 写死的 `MODEL_NAME_MAPPER`。
-  4. `.stream()` 执行；子 agent 内部工具经**同一套 `ToolEventCallback`**、带 `taskId` 上报 → TUI 内联嵌套显示。
+  4. `.stream()` 执行；子 agent 内部工具经**同一套 `ToolCallbackAdapter`**、带 `taskId` 上报 → TUI 内联嵌套显示。
   5. 完成后发 `onSubagentFinished(parentTurnId, taskId, 最终文本)`，返回最终文本。
 
 #### `SubagentTool`（自写，工具名 `Task`）
@@ -140,7 +140,7 @@ record SubagentSpec(
       @ToolParam(description="which agent type") String subagent_type) {}
   ```
 - `FunctionToolCallback.builder("Task", fn).inputType(SubagentCall.class).description(desc).build()`，其中：
-  - `fn`：`subagent_type` 找 `SubagentSpec`（找不到抛清晰错误），调 `runner.run(spec, prompt, currentTurnId)` 返回结果。currentTurnId 经 ToolContext/ThreadLocal 取（复用现有 `ToolEventCallback` 的 turnId 机制）。
+  - `fn`：`subagent_type` 找 `SubagentSpec`（找不到抛清晰错误），调 `runner.run(spec, prompt, currentTurnId)` 返回结果。currentTurnId 经 ToolContext/ThreadLocal 取（复用现有 `ToolCallbackAdapter` 的 turnId 机制）。
   - `desc`：复制框架 `TASK_DESCRIPTION_TEMPLATE`、**裁掉 background/resume/parallel 段**，`%s` 用四个 spec 的 `name: description`（自己拼，不依赖 `toSubagentRegistrations()`）填充。
 - v2：给 `SubagentCall` 加回 `run_in_background`，`fn` 分流到 `SubagentTaskManager`（§12）。
 
@@ -175,7 +175,7 @@ void onSubagentStarted(long turnId, String taskId, String agentName, String desc
 void onSubagentFinished(long turnId, String taskId, String finalText);
 ```
 
-工具事件复用现有 `onToolStarted/onToolFinished`，但需能携带「所属 taskId（可空）」以便 TUI 决定缩进层级。方案：给这两个方法**加一个可空 `taskId` 维度**（或新增带 taskId 的重载），保持 turnId 语义不变。`ToolEventCallback` 从 ToolContext 读 `taskId`（runner 给子 agent 工具的 ToolContext 里放 taskId），无 taskId 即主流工具。
+工具事件复用现有 `onToolStarted/onToolFinished`，但需能携带「所属 taskId（可空）」以便 TUI 决定缩进层级。方案：给这两个方法**加一个可空 `taskId` 维度**（或新增带 taskId 的重载），保持 turnId 语义不变。`ToolCallbackAdapter` 从 ToolContext 读 `taskId`（runner 给子 agent 工具的 ToolContext 里放 taskId），无 taskId 即主流工具。
 
 **turnId 归属不变**：子 agent 工具事件的 turnId = 发起 Task 的那个回合 turnId（迟到过滤、取消语义与主流一致）。
 
@@ -233,7 +233,7 @@ API key 经配置/环境变量注入；缺 key 的 provider `available()==false`
 1. `LlmProvider` + 三实现 + `ProviderRegistry`（先不接 UI，纯装配）。
 2. 主 agent 层改造：`AgentTools.build` 收 provider、`CodingAgent.submit` 用 provider.options；`/model` 跨家切换。
 3. 自带四个通用 `.md` + `SubagentSpec` / `SubagentLoader` / `SubagentRunner` / `SubagentTool`（工具名 `Task`），装进主 agent 工具集。
-4. `AgentListener` 扩展 + `ToolEventCallback` 带 taskId + `CodeTuiView` 嵌套渲染。
+4. `AgentListener` 扩展 + `ToolCallbackAdapter` 带 taskId + `CodeTuiView` 嵌套渲染。
 5. 测试 + pty 冒烟 + 重新 package。
 
 ## 12. 第二版后台执行设计草图（留缝，非本版实现）

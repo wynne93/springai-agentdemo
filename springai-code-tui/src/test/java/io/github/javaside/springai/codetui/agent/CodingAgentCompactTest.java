@@ -1,7 +1,7 @@
 package io.github.javaside.springai.codetui.agent;
 
 import io.github.javaside.springai.codetui.agent.agentListener.AgentListener;
-import io.github.javaside.springai.codetui.agent.compactionStrategy.NotifyingCompactionStrategy;
+import io.github.javaside.springai.codetui.agent.compactionStrategy.NotifyingCompactionStrategyAdapter;
 import io.github.javaside.springai.codetui.agent.record.AskRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -101,7 +101,7 @@ class CodingAgentCompactTest {
         FakeSessionService fake = new FakeSessionService();
         fake.failBeforeStrategy = new RuntimeException("session not found");   // 进策略前就抛
         // 策略永不应被调用（compact 会先抛），但仍需传一个非 null 策略。
-        CompactionStrategy manual = new NotifyingCompactionStrategy(req -> null, listener, "manual");
+        CompactionStrategy manual = new NotifyingCompactionStrategyAdapter(req -> null, listener, "manual");
 
         CodingAgent agent = new CodingAgent(
                 dummyChatClient(), listener, "sess-1", new AtomicLong(), fake, manual, null);

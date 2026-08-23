@@ -1,6 +1,6 @@
 package io.github.javaside.springai.codetui.agent.subAgent;
 
-import io.github.javaside.springai.codetui.agent.ToolEventCallback;
+import io.github.javaside.springai.codetui.agent.ToolCallbackAdapter;
 import io.github.javaside.springai.codetui.agent.agentListener.AgentListener;
 import io.github.javaside.springai.codetui.agent.llmProvider.ProviderRegistry;
 import io.github.javaside.springai.codetui.agent.record.SubagentSpec;
@@ -17,7 +17,7 @@ import java.util.function.Supplier;
 
 /**
  * provider 中立的子 agent 执行器。前台串行：在主 agent 的 Task 工具调用内同步执行，
- * 子 agent 内部工具活动经带 taskId 的工具事件实时上报（见 {@link ToolEventCallback}）。
+ * 子 agent 内部工具活动经带 taskId 的工具事件实时上报（见 {@link ToolCallbackAdapter}）。
  *
  * <p>用激活 provider 的 chatModel 建子 agent 专用 ChatClient（过滤后工具 + system=spec.systemPrompt
  * + ToolCallAdvisor），<b>不挂</b> SessionMemory advisor——子 agent 上下文独立。model 空→跟随激活 provider。
@@ -57,8 +57,8 @@ public final class SubagentRunner {
                     // .options 接收 native builder（与 CodingAgent.submit 一致，mutate 保留 maxTokens 等）
                     .options(options.mutate())
                     // 子 agent 内部工具事件带上 parentTurnId + taskId（供 TUI 缩进）
-                    .toolContext(Map.of(ToolEventCallback.TURN_ID_KEY, parentTurnId,
-                            ToolEventCallback.TASK_ID_KEY, taskId))
+                    .toolContext(Map.of(ToolCallbackAdapter.TURN_ID_KEY, parentTurnId,
+                            ToolCallbackAdapter.TASK_ID_KEY, taskId))
                     .call()
                     .content();
             String finalText = result == null ? "" : result;
